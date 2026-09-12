@@ -12,3 +12,4 @@ cookies*.txt
 MenubarApp/.build/
 MenubarApp/.swiftpm/
 IGDL.app/
+dist/
