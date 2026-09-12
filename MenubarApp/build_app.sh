@@ -43,7 +43,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <key>LSUIElement</key>
     <true/>
     <key>LSMinimumSystemVersion</key>
-    <string>26.0</string>
+    <string>13.0</string>
 </dict>
 </plist>
 PLIST

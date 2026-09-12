@@ -112,8 +112,8 @@ override the detected `igdl` executable path.
 To launch it automatically at login: System Settings → General → Login Items →
 add `igdl/IGDL.app`.
 
-Requires macOS 26 (Tahoe) or later (the UI uses Liquid Glass-era gradient APIs) and Swift's
-command-line tools (`swift build`); no full Xcode install needed.
+Requires macOS 13+ (uses `MenuBarExtra`) and Swift's command-line tools (`swift build`);
+no full Xcode install needed.
 
 ### Gatekeeper
 
