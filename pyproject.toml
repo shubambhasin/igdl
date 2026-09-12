@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "igdl"
+version = "0.1.0"
+description = "Download Instagram Reels/posts to a single merged mp4 via yt-dlp + ffmpeg"
+requires-python = ">=3.11"
+dependencies = [
+    "yt-dlp>=2024.8.6",
+]
+
+[project.scripts]
+igdl = "igdl.cli:main"
+
+[tool.setuptools]
+packages = ["igdl"]

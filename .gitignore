@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+*.mp4
+cookies*.txt
+.DS_Store
+
+MenubarApp/.build/
+MenubarApp/.swiftpm/
+IGDL.app/
