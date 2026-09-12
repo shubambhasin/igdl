@@ -112,15 +112,38 @@ override the detected `igdl` executable path.
 To launch it automatically at login: System Settings → General → Login Items →
 add `igdl/IGDL.app`.
 
-Requires macOS 13+ (uses `MenuBarExtra`) and Swift's command-line tools (`swift build`);
-no full Xcode install needed.
+Requires macOS 26 (Tahoe) or later (the UI uses Liquid Glass-era gradient APIs) and Swift's
+command-line tools (`swift build`); no full Xcode install needed.
 
 ### Gatekeeper
 
 `build_app.sh` ad-hoc code-signs `IGDL.app` (`codesign --sign -`) after building, which is
 enough for a locally built app to launch without the "damaged" / "unidentified developer"
 errors that unsigned arm64 binaries can hit. This does **not** produce a Developer ID
-signature or notarization (both require a paid Apple Developer account), so if you ever
-zip/AirDrop/upload the `.app` to someone else, macOS will still flag it on their machine —
-ad-hoc signing only helps for apps built and run in place, which is this repo's use case.
+signature or notarization (both require a paid Apple Developer account), so a `.app` you
+zip/AirDrop/download from elsewhere will still get a Gatekeeper warning the first time you
+open it — right-click → Open bypasses that.
+
+### Distributing it (DMG)
+
+```bash
+cd MenubarApp
+./build_dmg.sh 1.0.0   # builds IGDL.app, then packages dist/IGDL-1.0.0.dmg
+```
+
+The DMG mounts with `IGDL.app` next to an `Applications` symlink for a normal
+drag-to-install. This project's DMGs are attached to
+[GitHub Releases](https://github.com/shubambhasin/igdl/releases).
+
+## Landing page
+
+`site/` is a static one-page site (plain HTML/CSS, no build step) that links to the latest
+release DMG. `vercel.json` at the repo root points Vercel at `site/` as the output directory.
+
+To deploy: connect this repo at [vercel.com/new](https://vercel.com/new) — Vercel will pick
+up `vercel.json` automatically, no other configuration needed. To preview locally:
+
+```bash
+python3 -m http.server 8080 --directory site
+```
 
