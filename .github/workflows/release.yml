@@ -26,8 +26,13 @@ jobs:
         working-directory: MenubarApp
         run: ./build_dmg.sh "${{ steps.version.outputs.version }}"
 
+      - name: Add stable-named alias for the landing page
+        run: cp "dist/IGDL-${{ steps.version.outputs.version }}.dmg" dist/IGDL-latest.dmg
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/IGDL-${{ steps.version.outputs.version }}.dmg
+          files: |
+            dist/IGDL-${{ steps.version.outputs.version }}.dmg
+            dist/IGDL-latest.dmg
           generate_release_notes: true
