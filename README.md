@@ -2,6 +2,8 @@
 
 Download Instagram Reels/posts to a single merged `.mp4`, driven by `yt-dlp` + `ffmpeg`.
 
+**Website:** [ig-downloader-rosy.vercel.app](https://ig-downloader-rosy.vercel.app)
+
 ## One-time setup
 
 ```bash
