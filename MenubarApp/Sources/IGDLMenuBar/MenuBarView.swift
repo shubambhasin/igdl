@@ -5,39 +5,43 @@ struct MenuBarView: View {
     @ObservedObject var manager: DownloadManager
     @State private var urlText: String = ""
     @State private var showingSettings = false
-    @Namespace private var glassNamespace
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             header
 
-            GlassEffectContainer(spacing: 10) {
-                VStack(alignment: .leading, spacing: 10) {
-                    TextField("Paste an Instagram URL…", text: $urlText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .glassEffect(.regular.interactive(), in: .capsule)
-                        .onSubmit(submit)
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Paste an Instagram URL…", text: $urlText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.primary.opacity(0.05))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(igdlGradient.opacity(0.5), lineWidth: 1.2)
+                    )
+                    .onSubmit(submit)
 
-                    HStack(spacing: 8) {
-                        Button(action: submit) {
-                            Label("Download", systemImage: "arrow.down.to.line")
-                                .font(.system(size: 13, weight: .medium))
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .tint(.blue)
-                        .disabled(manager.isDownloading || urlText.isEmpty)
-
-                        Button(action: pasteFromClipboard) {
-                            Image(systemName: "doc.on.clipboard")
-                        }
-                        .buttonStyle(.glass)
-                        .disabled(manager.isDownloading)
-                        .help("Paste from Clipboard")
+                HStack(spacing: 8) {
+                    Button(action: submit) {
+                        Label("Download", systemImage: "arrow.down.to.line")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(GradientButtonStyle())
+                    .disabled(manager.isDownloading || urlText.isEmpty)
+
+                    Button(action: pasteFromClipboard) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(GradientOutlineButtonStyle())
+                    .disabled(manager.isDownloading)
+                    .help("Paste from Clipboard")
                 }
             }
 
@@ -57,24 +61,36 @@ struct MenuBarView: View {
 
             footer
         }
-        .padding(16)
-        .frame(width: 340)
+        .padding(14)
+        .frame(width: 320)
+        .background(
+            LinearGradient(
+                colors: [Color.blue.opacity(0.10), Color.clear],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
         .sheet(isPresented: $showingSettings) {
             SettingsView(manager: manager, isPresented: $showingSettings)
         }
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 22))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.blue)
+        HStack(spacing: 9) {
+            ZStack {
+                Circle()
+                    .fill(igdlGradient)
+                    .frame(width: 28, height: 28)
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+            }
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("igdl").font(.system(size: 14, weight: .semibold))
+            VStack(alignment: .leading, spacing: 0) {
+                Text("igdl")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(igdlGradient)
                 Text("Instagram reel & post downloader")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -82,35 +98,29 @@ struct MenuBarView: View {
     }
 
     private var statusRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ProgressView().controlSize(.small)
             Text("Downloading…")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .glassEffect(in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func errorRow(_ error: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .top, spacing: 5) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.red)
             Text(error)
                 .font(.caption)
                 .foregroundStyle(.red)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .glassEffect(.regular.tint(.red.opacity(0.15)), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var recentSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Recent")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
@@ -123,15 +133,14 @@ struct MenuBarView: View {
                     .padding(.vertical, 4)
             } else {
                 ScrollView {
-                    GlassEffectContainer(spacing: 6) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(manager.records) { record in
-                                RecordRow(record: record)
-                            }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(manager.records.enumerated()), id: \.element.id) { index, record in
+                            if index > 0 { Divider() }
+                            RecordRow(record: record)
                         }
                     }
                 }
-                .frame(maxHeight: 190)
+                .frame(maxHeight: 180)
             }
         }
     }
@@ -139,12 +148,10 @@ struct MenuBarView: View {
     private var footer: some View {
         HStack {
             Button("Settings…") { showingSettings = true }
-                .buttonStyle(.glass)
-                .controlSize(.small)
+                .buttonStyle(GradientTextButtonStyle())
             Spacer()
             Button("Quit") { NSApplication.shared.terminate(nil) }
-                .buttonStyle(.glass)
-                .controlSize(.small)
+                .buttonStyle(GradientTextButtonStyle())
         }
     }
 
@@ -176,13 +183,15 @@ private struct RecordRow: View {
     let record: DownloadRecord
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: record.success ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(record.success ? .green : .red)
-                .font(.system(size: 14))
+        HStack(alignment: .top, spacing: 7) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(record.success
+                      ? LinearGradient(colors: [.green, .mint], startPoint: .top, endPoint: .bottom)
+                      : LinearGradient(colors: [.red, .orange], startPoint: .top, endPoint: .bottom))
+                .frame(width: 3)
+                .padding(.vertical, 1)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(record.url)
                     .font(.caption)
                     .lineLimit(1)
@@ -205,9 +214,7 @@ private struct RecordRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .glassEffect(in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.vertical, 6)
     }
 }
 
@@ -218,51 +225,49 @@ struct SettingsView: View {
     @State private var igdlPath: String = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
-                Image(systemName: "gearshape.fill")
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.blue)
-                Text("igdl Settings").font(.system(size: 14, weight: .semibold))
+                ZStack {
+                    Circle().fill(igdlGradient).frame(width: 24, height: 24)
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white)
+                }
+                Text("igdl Settings")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(igdlGradient)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Output directory").font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     TextField("~/Downloads", text: $outputDirectory)
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .glassEffect(in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .textFieldStyle(.roundedBorder)
                     Button("Choose…") { chooseDirectory() }
-                        .buttonStyle(.glass)
+                        .buttonStyle(GradientOutlineButtonStyle())
                 }
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("igdl executable path (optional override)").font(.caption).foregroundStyle(.secondary)
                 TextField("auto-detected", text: $igdlPath)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .glassEffect(in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .textFieldStyle(.roundedBorder)
             }
 
             HStack {
                 Spacer()
                 Button("Cancel") { isPresented = false }
-                    .buttonStyle(.glass)
+                    .buttonStyle(GradientTextButtonStyle())
                 Button("Save") {
                     manager.outputDirectory = outputDirectory
                     UserDefaults.standard.set(igdlPath, forKey: "igdlPath")
                     isPresented = false
                 }
-                .buttonStyle(.glassProminent)
-                .tint(.blue)
+                .buttonStyle(GradientButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(width: 380)
         .onAppear {
             outputDirectory = manager.outputDirectory

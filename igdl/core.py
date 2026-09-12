@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -53,7 +56,15 @@ def download(
     outtmpl = str(out_dir / (filename or "%(id)s.%(ext)s"))
 
     ydl_opts: dict = {
-        "format": "bv*+ba/b",
+        # Prefer H.264 video + AAC audio when Instagram offers it; VP9/AV1 (its
+        # other common formats) don't play in QuickTime/Photos/AVFoundation on
+        # macOS, so we transcode below if this fallback is what we get instead.
+        "format": (
+            "bv*[vcodec^=avc1]+ba[acodec^=mp4a]"
+            "/bv*[vcodec^=avc1]+ba"
+            "/b[vcodec^=avc1]"
+            "/bv*+ba/b"
+        ),
         "merge_output_format": "mp4",
         "outtmpl": outtmpl,
         "quiet": not verbose,
@@ -81,6 +92,9 @@ def download(
     if not final_path or not final_path.exists():
         raise IGDLError("Download finished but the output file could not be located.")
 
+    if _needs_h264_transcode(info):
+        _transcode_to_h264(final_path, verbose=verbose)
+
     return DownloadResult(path=final_path, size_bytes=final_path.stat().st_size)
 
 
@@ -100,6 +114,46 @@ def _resolve_output_path(info: dict, ydl_opts: dict, out_dir: Path) -> Path | No
     if prepared_path.exists():
         return prepared_path
     return None
+
+
+def _needs_h264_transcode(info: dict) -> bool:
+    """True if the video track yt-dlp picked isn't H.264 (i.e. won't play in
+    QuickTime/Photos/AVFoundation on macOS)."""
+    requested = info.get("requested_downloads") or [info]
+    for entry in requested:
+        vcodec = entry.get("vcodec")
+        if vcodec and vcodec != "none" and not vcodec.startswith("avc1"):
+            return True
+    return False
+
+
+def _transcode_to_h264(path: Path, verbose: bool = False) -> None:
+    """Re-encode the video track to H.264 in place, keeping audio as AAC and
+    adding +faststart so it plays directly (QuickTime, Photos, Finder Quick Look)."""
+    fd, tmp_name = tempfile.mkstemp(suffix=".mp4", dir=str(path.parent))
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+
+    cmd = [
+        "ffmpeg", "-y", "-i", str(path),
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+        str(tmp_path),
+    ]
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            capture_output=not verbose,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        tmp_path.unlink(missing_ok=True)
+        stderr = exc.stderr or ""
+        raise IGDLError(f"Failed to transcode video for compatibility:\n{stderr}") from exc
+
+    tmp_path.replace(path)
 
 
 def _friendly_error(message: str) -> str:
