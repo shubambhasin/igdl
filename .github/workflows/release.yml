@@ -1,0 +1,33 @@
+name: Release
+
+# Build the DMG and attach it to a GitHub Release whenever a version tag is
+# pushed, e.g.:
+#   git tag v1.0.2 && git push origin v1.0.2
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build DMG
+        working-directory: MenubarApp
+        run: ./build_dmg.sh "${{ steps.version.outputs.version }}"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/IGDL-${{ steps.version.outputs.version }}.dmg
+          generate_release_notes: true

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "igdl/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "MenubarApp/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "igdl/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "MenubarApp/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install igdl + test deps
+        run: |
+          pip install -e .
+          pip install pytest
+      - name: Run tests
+        run: pytest -q
+
+  swift-build:
+    # Needs a runner with an Xcode toolchain new enough for the macOS 26 SDK
+    # (Package.swift targets .macOS(.v26) for the Liquid Glass-era gradient APIs).
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build IGDL.app
+        working-directory: MenubarApp
+        run: ./build_app.sh
+      - name: Upload IGDL.app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IGDL-app
+          path: IGDL.app
+          retention-days: 14
