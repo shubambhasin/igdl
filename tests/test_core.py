@@ -49,30 +49,105 @@ def test_download_rejects_bad_browser(monkeypatch, tmp_path):
         )
 
 
-def test_download_success_mocked(monkeypatch, tmp_path):
+class FakeYDL:
+    """Minimal stand-in for yt_dlp.YoutubeDL covering the calls download() makes:
+    extract_info(download=False), process_video_result(download=True), and
+    prepare_filename(). "Downloading" a video just writes a fake file."""
+
+    def __init__(self, opts):
+        self.opts = opts
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def extract_info(self, url, download=False):
+        return self.info
+
+    def process_video_result(self, item, download=True):
+        path = Path(self._prepare(item))
+        path.write_bytes(b"0" * item.get("_fake_size", 4096))
+
+    def prepare_filename(self, info):
+        return self._prepare(info)
+
+    def _prepare(self, info):
+        return self.opts["outtmpl"].replace("%(id)s", str(info["id"])).replace("%(ext)s", info.get("ext", "mp4"))
+
+
+def test_download_single_video_mocked(monkeypatch, tmp_path):
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ffmpeg")
 
-    fake_file = tmp_path / "abc123.mp4"
-    fake_file.write_bytes(b"0" * 4096)
-
-    class FakeYDL:
-        def __init__(self, opts):
-            self.opts = opts
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def extract_info(self, url, download=True):
-            return {"id": "abc123", "ext": "mp4", "requested_downloads": [{"filepath": str(fake_file)}]}
-
-        def prepare_filename(self, info):
-            return str(fake_file)
-
+    FakeYDL.info = {
+        "id": "abc123", "ext": "mp4", "vcodec": "avc1.42001f",
+        "formats": [{"format_id": "0"}], "_fake_size": 4096,
+    }
     monkeypatch.setattr("igdl.core.yt_dlp.YoutubeDL", FakeYDL)
 
-    result = download("https://www.instagram.com/reel/abc123/", tmp_path)
-    assert result.path == fake_file
-    assert result.size_bytes == 4096
+    results = download("https://www.instagram.com/reel/abc123/", tmp_path)
+    assert len(results) == 1
+    assert results[0].path == tmp_path / "abc123.mp4"
+    assert results[0].size_bytes == 4096
+
+
+def test_download_single_image_mocked(monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ffmpeg")
+
+    FakeYDL.info = {
+        "id": "img123",
+        "formats": [],
+        "thumbnails": [{"url": "https://cdn.example.com/x_s150x150_y.jpg"},
+                        {"url": "https://cdn.example.com/x_s1080x1080_y.jpg"}],
+    }
+    monkeypatch.setattr("igdl.core.yt_dlp.YoutubeDL", FakeYDL)
+
+    downloaded = {}
+
+    def fake_download_image(url, dest):
+        downloaded["url"] = url
+        dest.write_bytes(b"1" * 2048)
+
+    monkeypatch.setattr("igdl.core._download_image", fake_download_image)
+
+    results = download("https://www.instagram.com/p/img123/", tmp_path)
+    assert len(results) == 1
+    assert results[0].path == tmp_path / "img123.jpg"
+    assert results[0].size_bytes == 2048
+    assert "s1080x1080" in downloaded["url"]  # picked the highest-resolution candidate
+
+
+def test_download_mixed_carousel_mocked(monkeypatch, tmp_path):
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ffmpeg")
+
+    FakeYDL.info = {
+        "_type": "playlist",
+        "entries": [
+            {"id": "vid1", "ext": "mp4", "vcodec": "avc1.42001f", "formats": [{"format_id": "0"}], "_fake_size": 1000},
+            {"id": "img1", "formats": [], "thumbnails": [{"url": "https://cdn.example.com/a_s720x720_b.jpg"}]},
+        ],
+    }
+    monkeypatch.setattr("igdl.core.yt_dlp.YoutubeDL", FakeYDL)
+    monkeypatch.setattr("igdl.core._download_image", lambda url, dest: dest.write_bytes(b"2" * 512))
+
+    results = download("https://www.instagram.com/p/carousel123/", tmp_path)
+    paths = sorted(r.path.name for r in results)
+    assert paths == ["img1.jpg", "vid1.mp4"]
+
+
+def test_best_image_url_picks_largest():
+    from igdl.core import _best_image_url
+
+    thumbs = [
+        {"url": "https://x/y_s320x320_z.jpg"},
+        {"url": "https://x/y_s1080x1080_z.jpg"},
+        {"url": "https://x/y_s150x150_z.jpg"},
+    ]
+    assert "1080" in _best_image_url(thumbs)
+
+
+def test_best_image_url_empty_list_returns_none():
+    from igdl.core import _best_image_url
+
+    assert _best_image_url([]) is None

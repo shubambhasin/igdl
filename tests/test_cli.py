@@ -63,9 +63,29 @@ def test_main_success_prints_path(monkeypatch, capsys, tmp_path):
     fake_file.write_bytes(b"0" * 2048)
 
     def fake_download(*args, **kwargs):
-        return DownloadResult(path=fake_file, size_bytes=fake_file.stat().st_size)
+        return [DownloadResult(path=fake_file, size_bytes=fake_file.stat().st_size)]
 
     monkeypatch.setattr("igdl.cli.download", fake_download)
     exit_code = main(["https://www.instagram.com/reel/abc123/"])
     assert exit_code == 0
-    assert str(fake_file) in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert str(fake_file) in out
+    assert "done:" not in out  # only printed for multi-file (carousel) results
+
+
+def test_main_success_prints_all_carousel_files(monkeypatch, capsys, tmp_path):
+    from igdl.core import DownloadResult
+
+    files = []
+    for name, size in [("vid1.mp4", 4096), ("img1.jpg", 1024)]:
+        f = tmp_path / name
+        f.write_bytes(b"0" * size)
+        files.append(DownloadResult(path=f, size_bytes=size))
+
+    monkeypatch.setattr("igdl.cli.download", lambda *a, **k: files)
+    exit_code = main(["https://www.instagram.com/p/carousel123/"])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "vid1.mp4" in out
+    assert "img1.jpg" in out
+    assert "done: 2 files" in out

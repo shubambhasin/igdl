@@ -1,6 +1,7 @@
 # igdl
 
-Download Instagram Reels/posts to a single merged `.mp4`, driven by `yt-dlp` + `ffmpeg`.
+Download Instagram Reels, image posts, and carousels — videos merged to a single
+`.mp4` via `yt-dlp` + `ffmpeg`, images saved at full resolution.
 
 **Website:** [ig-downloader-rosy.vercel.app](https://ig-downloader-rosy.vercel.app)
 
@@ -53,13 +54,29 @@ Without the venv on PATH, run it via make:
 make run URL="https://www.instagram.com/reel/DdJ7Rj1TG9X/"
 ```
 
+Image post or carousel — same command, igdl figures out what each item is:
+
+```bash
+igdl "https://www.instagram.com/p/DFYwLR5xReU/"
+# saved: ~/Downloads/DFYwKKSPuLh.mp4 (0.1 MB)
+# saved: ~/Downloads/DFYwLKAxihq.jpg (0.1 MB)
+# saved: ~/Downloads/DFYwLJ-RzcT.jpg (0.0 MB)
+# saved: ~/Downloads/DFYwLJ-RQFG.jpg (0.0 MB)
+# done: 4 files, 0.3 MB total
+```
+
+Each carousel item is saved under its own Instagram-assigned id (`<id>.mp4` for
+videos, `<id>.jpg` for images) so files never collide — `--filename` is only
+honored for single-item downloads, since one custom name can't apply to
+several files.
+
 ## Options
 
 | Flag | Description |
 |---|---|
 | `url` (positional) | Instagram reel/post URL |
 | `-o`, `--out` | Output directory (default `~/Downloads`) |
-| `--filename` | Custom output filename (default `%(id)s.%(ext)s`) |
+| `--filename` | Custom output filename, single items only (default `%(id)s.%(ext)s`) |
 | `--cookies-from-browser` | `chrome`, `safari`, `firefox`, etc. — for private posts |
 | `-v`, `--verbose` | Show full yt-dlp output |
 

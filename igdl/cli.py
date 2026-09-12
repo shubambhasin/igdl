@@ -12,7 +12,7 @@ from .core import IGDLError, download
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="igdl",
-        description="Download an Instagram Reel or post as a single merged mp4.",
+        description="Download an Instagram Reel, image post, or carousel.",
     )
     parser.add_argument("url", help="Instagram reel/post URL")
     parser.add_argument(
@@ -23,7 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--filename",
         default=None,
-        help="Custom output filename template (default: %%(id)s.%%(ext)s)",
+        help="Custom output filename template (default: %%(id)s.%%(ext)s). "
+             "Ignored for carousels (each item is saved as <id>.mp4/.jpg) to avoid collisions.",
     )
     parser.add_argument(
         "--cookies-from-browser",
@@ -45,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        result = download(
+        results = download(
             url=args.url,
             out_dir=Path(args.out).expanduser(),
             filename=args.filename,
@@ -59,8 +60,14 @@ def main(argv: list[str] | None = None) -> int:
         print("interrupted", file=sys.stderr)
         return 130
 
-    size_mb = result.size_bytes / (1024 * 1024)
-    print(f"saved: {result.path} ({size_mb:.1f} MB)")
+    for result in results:
+        size_mb = result.size_bytes / (1024 * 1024)
+        print(f"saved: {result.path} ({size_mb:.1f} MB)")
+
+    if len(results) > 1:
+        total_mb = sum(r.size_bytes for r in results) / (1024 * 1024)
+        print(f"done: {len(results)} files, {total_mb:.1f} MB total")
+
     return 0
 
 

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,8 +47,13 @@ def download(
     filename: str | None = None,
     cookies_from_browser: str | None = None,
     verbose: bool = False,
-) -> DownloadResult:
-    """Download a single Instagram reel/post URL, merged to one mp4, into out_dir."""
+) -> list[DownloadResult]:
+    """Download an Instagram reel/post/carousel into out_dir.
+
+    Returns one DownloadResult per saved file: a single video/image for a plain
+    reel or image post, or one per item for a carousel (each item downloaded
+    as a video or an image, whichever it actually is).
+    """
     validate_url(url)
     check_ffmpeg()
 
@@ -71,6 +78,12 @@ def download(
         "no_warnings": not verbose,
         "noprogress": not verbose,
         "restrictfilenames": False,
+        # yt-dlp's Instagram extractor only handles video; image posts and
+        # image items inside a carousel would otherwise abort extraction
+        # entirely with "No video formats found!". This lets extraction
+        # succeed so we can pull each image's real URL from its thumbnail
+        # list ourselves (see _best_image_url / _download_image below).
+        "ignore_no_formats_error": True,
     }
 
     if cookies_from_browser:
@@ -84,18 +97,36 @@ def download(
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            info = ydl.extract_info(url, download=False)
+            items = [item for item in (info.get("entries") or [info]) if item]
+            if not items:
+                raise IGDLError("No downloadable video or image found at this URL.")
+            multi = len(items) > 1
+
+            results: list[DownloadResult] = []
+            for item in items:
+                if item.get("formats"):
+                    ydl.process_video_result(item, download=True)
+                    video_path = _resolve_output_path(item, ydl_opts, out_dir)
+                    if not video_path or not video_path.exists():
+                        continue
+                    if _needs_h264_transcode(item):
+                        _transcode_to_h264(video_path, verbose=verbose)
+                    results.append(DownloadResult(path=video_path, size_bytes=video_path.stat().st_size))
+                else:
+                    image_url = _best_image_url(item.get("thumbnails") or [])
+                    if not image_url:
+                        continue
+                    dest = _image_output_path(item, out_dir, filename, multi)
+                    _download_image(image_url, dest)
+                    results.append(DownloadResult(path=dest, size_bytes=dest.stat().st_size))
     except yt_dlp.utils.DownloadError as exc:
         raise IGDLError(_friendly_error(str(exc))) from exc
 
-    final_path = _resolve_output_path(info, ydl_opts, out_dir)
-    if not final_path or not final_path.exists():
-        raise IGDLError("Download finished but the output file could not be located.")
+    if not results:
+        raise IGDLError("Download finished but no files could be saved.")
 
-    if _needs_h264_transcode(info):
-        _transcode_to_h264(final_path, verbose=verbose)
-
-    return DownloadResult(path=final_path, size_bytes=final_path.stat().st_size)
+    return results
 
 
 def _resolve_output_path(info: dict, ydl_opts: dict, out_dir: Path) -> Path | None:
@@ -114,6 +145,44 @@ def _resolve_output_path(info: dict, ydl_opts: dict, out_dir: Path) -> Path | No
     if prepared_path.exists():
         return prepared_path
     return None
+
+
+_IMAGE_RESOLUTION_RE = re.compile(r"_s(\d+)x(\d+)_")
+
+
+def _best_image_url(thumbnails: list[dict]) -> str | None:
+    """Pick the highest-resolution candidate. Instagram's CDN URLs encode
+    their size as e.g. '..._s1080x1080_...'; fall back to the last listed
+    thumbnail if none of them match that pattern."""
+    sized = []
+    for thumb in thumbnails:
+        url = thumb.get("url")
+        if not url:
+            continue
+        match = _IMAGE_RESOLUTION_RE.search(url)
+        area = int(match.group(1)) * int(match.group(2)) if match else -1
+        sized.append((area, url))
+    if not sized:
+        return None
+    return max(sized, key=lambda pair: pair[0])[1]
+
+
+def _image_output_path(item: dict, out_dir: Path, filename: str | None, multi: bool) -> Path:
+    item_id = item.get("id") or "image"
+    if filename and not multi:
+        name = filename.replace("%(id)s", str(item_id)).replace("%(ext)s", "jpg")
+        return out_dir / name
+    return out_dir / f"{item_id}.jpg"
+
+
+def _download_image(url: str, dest: Path) -> None:
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response, open(dest, "wb") as f:
+            shutil.copyfileobj(response, f)
+    except Exception as exc:
+        dest.unlink(missing_ok=True)
+        raise IGDLError(f"Failed to download image: {exc}") from exc
 
 
 def _needs_h264_transcode(info: dict) -> bool:
